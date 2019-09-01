@@ -1,0 +1,165 @@
+How to Install Apache Tomcat 8 on CentOS 7
+Published on: Thu, May 12, 2016 at 12:49 pm EST
+CentOS
+Java
+Linux Guides
+Popular
+System Admin
+Web Servers
+Apache Tomcat is an open-source web server that is designed to serve Java web pages. It is widely deployed and powers various mission-critical web applications around the world.
+
+As a starter guide, this article explains how to install Apache Tomcat 8, the latest stable version of Apache Tomcat, onto a Vultr CentOS 7 server instance.
+
+Prerequisites
+Before further reading, you need to:
+
+Deploy a fresh Vultr CentOS 7 server instance.
+Log into this machine from your SSH terminal as a non-root sudo user.
+Step 1: Update your CentOS system
+First things first, you need to update the system to the latest stable status:
+
+sudo yum install epel-release
+sudo yum update -y && sudo reboot
+Use the same sudo user to log into the system after the reboot finishes.
+
+Step 2: Install Java
+You need to install Java SE 7.0 or later before Apache Tomcat can run properly. Here, I will install OpenJDK Runtime Environment 1.8.0 using YUM:
+
+sudo yum install java-1.8.0-openjdk.x86_64
+Now, you can confirm your installation with:
+
+java -version
+The output will resemble the following:
+
+openjdk version "1.8.0_91"
+OpenJDK Runtime Environment (build 1.8.0_91-b14)
+OpenJDK 64-Bit Server VM (build 25.91-b14, mixed mode)
+Step 3: Create a dedicated user for Apache Tomcat
+For security purposes, you need to create a dedicated non-root user "tomcat" who belongs to the "tomcat" group:
+
+sudo groupadd tomcat
+sudo mkdir /opt/tomcat
+sudo useradd -s /bin/nologin -g tomcat -d /opt/tomcat tomcat
+In this fashion, you created a user "tomcat" who belongs to the group "tomcat". You cannot use this user account to log into the system. The home directory is /opt/tomcat, which is where the Apache Tomcat program will reside.
+
+Step 4: Download and install the latest Apache Tomcat
+You can always find the latest stable version of Apache Tomcat 8 from its official download page, which is 8.0.33 as of writing.
+
+Under the "Binary Distributions" section and then the "Core" list, use the link pointing to the "tar.gz" archive to compose a wget command:
+
+cd ~
+wget http://www-us.apache.org/dist/tomcat/tomcat-8/v8.0.33/bin/apache-tomcat-8.0.33.tar.gz
+sudo tar -zxvf apache-tomcat-8.0.33.tar.gz -C /opt/tomcat --strip-components=1
+Step 5: Setup proper permissions
+Before you can run Apache Tomcat, you need to setup proper permissions for several directories:
+
+cd /opt/tomcat
+sudo chgrp -R tomcat conf
+sudo chmod g+rwx conf
+sudo chmod g+r conf/*
+sudo chown -R tomcat logs/ temp/ webapps/ work/
+
+sudo chgrp -R tomcat bin
+sudo chgrp -R tomcat lib
+sudo chmod g+rwx bin
+sudo chmod g+r bin/*
+Step 6: Setup a Systemd unit file for Apache Tomcat
+As a matter of convenience, you should setup a Systemd unit file for Apache Tomcat:
+
+sudo vi /etc/systemd/system/tomcat.service
+Populate the file with:
+
+[Unit]
+Description=Apache Tomcat Web Application Container
+After=syslog.target network.target
+
+[Service]
+Type=forking
+
+Environment=JAVA_HOME=/usr/lib/jvm/jre
+Environment=CATALINA_PID=/opt/tomcat/temp/tomcat.pid
+Environment=CATALINA_HOME=/opt/tomcat
+Environment=CATALINA_BASE=/opt/tomcat
+Environment='CATALINA_OPTS=-Xms512M -Xmx1024M -server -XX:+UseParallelGC'
+Environment='JAVA_OPTS=-Djava.awt.headless=true -Djava.security.egd=file:/dev/./urandom'
+
+ExecStart=/opt/tomcat/bin/startup.sh
+ExecStop=/bin/kill -15 $MAINPID
+
+User=tomcat
+Group=tomcat
+
+[Install]
+WantedBy=multi-user.target
+Save and quit:
+
+:wq
+Step 7: Install haveged, a security-related program
+For security purposes, you should install haveged as well:
+
+sudo yum install haveged
+sudo systemctl start haveged.service
+sudo systemctl enable haveged.service
+Step 8: Start and test Apache Tomcat
+Now, start the Apache Tomcat service and set it run on system boot:
+
+sudo systemctl start tomcat.service
+sudo systemctl enable tomcat.service
+In order to test Apache Tomcat in a web browser, you need to modify the firewall rules:
+
+sudo firewall-cmd --zone=public --permanent --add-port=8080/tcp
+sudo firewall-cmd --reload
+Then, you can test your installation of Apache Tomcat by visiting the following URL from a web browser:
+
+http://[your-Vultr-server-IP]:8080
+If nothing goes wrong, you will see the default Apache Tomcat front page.
+
+Step 9: Configure the Apache Tomcat web management interface
+In order to use the "Manager App" and the "Host manager" in the Apache Tomcat web interface, you need to create an admin user for your Apache Tomcat server:
+
+sudo vi /opt/tomcat/conf/tomcat-users.xml
+Within the </tomcat-users ...>...</tomcat-users> segment, insert a line to define a admin user:
+
+<user username="yourusername" password="yourpassword" roles="manager-gui,admin-gui,manager-script,admin-script"/>
+Remember to replace "yourusername" and "yourpassword" with your own ones, the less common the better.
+
+Save and quit:
+
+:wq
+Restart Apache Tomcat to put your modifications into effect:
+
+sudo systemctl restart tomcat.service
+Refresh the Apache Tomcat front page from your web browser. Log in the "Manager App" and the "Host manager" using the credentials you had setup earlier.
+
+
+Note: tomcat version 7 and above edit context.xml file
+
+in webapps manger and host-manger context.xml file should modified
+
+
+cd /webapps/manager/META-INF/
+vi context.xml
+ 
+replace last content with following
+
+<Context antiResourceLocking="false" privileged="true"
+   docBase="${catalina.home}/webapps/manager" >
+  <Valve className="org.apache.catalina.valves.RemoteAddrValve"
+         allow="^.*$" />
+</Context>
+
+
+cd /webapps/host-manager/META-INF/
+vi context.xml
+ 
+replace last content with following
+
+<Context antiResourceLocking="false" privileged="true"
+   docBase="${catalina.home}/webapps/host-manager" >
+  <Valve className="org.apache.catalina.valves.RemoteAddrValve"
+         allow="^.*$" />
+</Context>
+
+
+The Apache Tomcat setup is complete. You can now use it to deploy your own applications.
+
